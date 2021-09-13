@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -19,6 +19,8 @@ namespace GUI
 
         string gameDir = "";
         string patchDir = "";
+
+        Prefs prefs = new Prefs();
 
         readonly string[] gamePaths = { @"Origin Games|Origin\Titanfall2\vpk", @"Steam|SteamLibrary|Steam Library\steamapps\common\Titanfall2\vpk" };  // where the vpk folder is likely to be, used for autofilling
 
@@ -80,7 +82,7 @@ namespace GUI
             string backupDate = selectedItems[1].Text;
             string backupTime = selectedItems[2].Text;
 
-            string backupFolder = backupsDir + vpkShortName + @"\" + backupDate + "_" +  backupTime.Replace(":", "-") + @"\";  // backups\name\yyyy-MM-dd_HH-mm-ss\
+            string backupFolder = backupsDir + vpkShortName + @"\" + backupDate + "_" +  backupTime.Replace(":", "-") + @"\";  // \backups\name\yyyy-MM-dd_HH-mm-ss\
 
             if (!Directory.Exists(backupFolder))
             {
@@ -112,7 +114,7 @@ namespace GUI
 
         private void btnPatch_Click(object sender, EventArgs e)
         {
-            string vpkName = patchDir.Substring(patchDir.LastIndexOf('\\') + 1) + ".vpk";  // name of vpk is name of patch folder with a .vpk extension
+            string vpkName = new DirectoryInfo(patchDir).Name + ".vpk";  // name of vpk is name of patch folder with a .vpk extension
             string vpkPath = gameDir + @"\" + vpkName;
 
             if (!File.Exists(vpkPath))
@@ -150,7 +152,7 @@ namespace GUI
 
             if (cbBackup.Checked)
             {
-                string backupFolder = backupsDir + ShortVPKName(vpkName) + @"\" + File.GetLastWriteTime(vpkPath).ToString("yyyy-MM-dd_HH-mm-ss") + @"\";  // create folder in \backups\vpkname\ with the backup's last edit time
+                string backupFolder = backupsDir + ShortVPKname(vpkName) + @"\" + File.GetLastWriteTime(vpkPath).ToString("yyyy-MM-dd_HH-mm-ss") + @"\";  // create folder in \backups\vpkname\ with the backup's last edit time
                 Directory.CreateDirectory(backupFolder);
 
                 File.Copy(vpkPath, backupFolder + vpkName, true);
@@ -173,7 +175,7 @@ namespace GUI
             btnPatch.Enabled = true;
         }
 
-        private string ShortVPKName(string vpkName)  // used for backups folder and listview display
+        private string ShortVPKname(string vpkName)  // used for backups folder and listview display
         {
             return vpkName.Replace("englishclient_", string.Empty).Replace(".bsp.pak000_dir.vpk", string.Empty);
         }
@@ -221,30 +223,14 @@ namespace GUI
         }
 
 
-        private void SetPrefs()  // load saved options
+        private void LoadPrefs()  // load saved options
         {
-            string[] prefs = new string[]
-            {  // defaults
-                "",  // gameDir
-                "",  // patchDir
-                "1",  // showConfirmation
-                "1"  // createBackup
-            };
-            
-            if (File.Exists(prefsPath))
-            {
-                string[] prefsLines = File.ReadAllLines(prefsPath);
+            prefs.SetPrefsFromFile(prefsPath);
 
-                if (prefsLines.Length == prefs.Length)
-                {
-                    prefs = prefsLines;
-                }
-            }
-
-            gameDir = prefs[0];
-            patchDir = prefs[1];
-            cbShowConfirm.Checked = (prefs[2] != "0");
-            cbBackup.Checked = (prefs[3] != "0");
+            gameDir = prefs.gameDir;
+            patchDir = prefs.patchDir;
+            cbShowConfirm.Checked = prefs.showConfirm;
+            cbBackup.Checked = prefs.backup;
         }
 
         private void LoadBackups()  // read backups folder to populate backups listview
@@ -306,7 +292,7 @@ namespace GUI
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            SetPrefs();
+            LoadPrefs();
 
             lvBackups.ListViewItemSorter = new ListViewDateComparer();
             LoadBackups();
@@ -322,11 +308,12 @@ namespace GUI
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
-            File.WriteAllText(prefsPath,
-$@"{gameDir}
-{patchDir}
-{(cbShowConfirm.Checked ? 1 : 0)}
-{(cbBackup.Checked ? 1 : 0)}");
+            prefs.gameDir = gameDir;
+            prefs.patchDir = patchDir;
+            prefs.showConfirm = cbShowConfirm.Checked;
+            prefs.backup = cbBackup.Checked;
+
+            prefs.WritePrefsToFile(prefsPath);
         }
 
         private void lvBackups_SelectedIndexChanged(object sender, EventArgs e)
@@ -338,6 +325,39 @@ $@"{gameDir}
             }
 
             btnRestore.Enabled = true;
+        }
+    }
+
+    public class Prefs
+    {
+        public string gameDir = "";
+        public string patchDir = "";
+        public bool showConfirm = true;
+        public bool backup = true;
+
+        public void SetPrefsFromFile(string path)
+        {
+            if (File.Exists(path))
+            {
+                string[] prefsLines = File.ReadAllLines(path);
+
+                if (prefsLines.Length >= 4)
+                {
+                    gameDir = prefsLines[0];
+                    patchDir = prefsLines[1];
+                    if (bool.TryParse(prefsLines[2], out bool tmpSC)) { showConfirm = tmpSC; }
+                    if (bool.TryParse(prefsLines[3], out bool tmpBack)) { backup = tmpBack; }
+                }
+            }
+        }
+
+        public void WritePrefsToFile(string path)
+        {
+            File.WriteAllText(path,
+$@"{gameDir}
+{patchDir}
+{showConfirm}
+{backup}");
         }
     }
 }
