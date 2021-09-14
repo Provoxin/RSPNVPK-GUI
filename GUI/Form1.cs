@@ -15,14 +15,18 @@ namespace GUI
         }
 
         const string prefsPath = @"prefs.txt";
-        const string backupsDir = @"backups\";
+        const string backupsDir = @"backups";
 
         string gameDir = "";
         string patchDir = "";
 
         Prefs prefs = new Prefs();
 
-        readonly string[] gamePaths = { @"Origin Games|Origin\Titanfall2\vpk", @"Steam|SteamLibrary|Steam Library\steamapps\common\Titanfall2\vpk" };  // where the vpk folder is likely to be, used for autofilling
+        readonly string[] gamePaths = // where the vpk folder is likely to be, used for autofilling
+        {
+            Path.Combine("Origin Games|Origin", "Titanfall2", "vpk"),
+            Path.Combine("Steam|SteamLibrary|Steam Library", "steamapps", "common", "Titanfall2", "vpk")
+        };
 
         private void btnSelectGame_Click(object sender, EventArgs e)
         {
@@ -35,7 +39,7 @@ namespace GUI
 
             foreach (string subdirString in gamePaths)
             {
-                string foundDir = FindDir(gameDir, @"..\Titanfall2.exe", subdirString);  // attempt to find the vpk folder, verify with tf2.exe one folder up
+                string foundDir = FindDir(gameDir, Path.Combine("..", "Titanfall2.exe"), subdirString);  // attempt to find the vpk folder, verify with tf2.exe one folder up
                 if (foundDir != string.Empty)
                 {
                     gameDir = foundDir;
@@ -82,7 +86,7 @@ namespace GUI
             string backupDate = selectedItems[1].Text;
             string backupTime = selectedItems[2].Text;
 
-            string backupFolder = backupsDir + vpkShortName + @"\" + backupDate + "_" +  backupTime.Replace(":", "-") + @"\";  // \backups\name\yyyy-MM-dd_HH-mm-ss\
+            string backupFolder = Path.Combine(backupsDir, vpkShortName, backupDate + "_" + backupTime.Replace(":", "-"));
 
             if (!Directory.Exists(backupFolder))
             {
@@ -91,22 +95,22 @@ namespace GUI
             }
 
             string vpkName = FullVPKname(vpkShortName);
-            string vpkPath = gameDir + @"\" + vpkName;
+            string vpkPath = Path.Combine(gameDir, vpkName);
 
-            if (!File.Exists(backupFolder + vpkName))
+            if (!File.Exists(Path.Combine(backupFolder, vpkName)))
             {
                 MessageBox.Show("Selected backup not found", "Error");
                 return;
             }
 
             string archName = vpkName.Replace("english", string.Empty).Replace("_dir.vpk", "_228.vpk");
-            string archPath = gameDir + @"\" + archName;
+            string archPath = Path.Combine(gameDir, archName);
 
-            File.Copy(backupFolder + vpkName, vpkPath, true);
+            File.Copy(Path.Combine(backupFolder, vpkName), vpkPath, true);
             
-            if (File.Exists(backupFolder + archName))  // don't error if false, it's possible to have no _228
+            if (File.Exists(Path.Combine(backupFolder, archName)))  // don't error if false, it's possible to have no _228
             {
-                File.Copy(backupFolder + archName, archPath, true);
+                File.Copy(Path.Combine(backupFolder, archName), archPath, true);
             }
 
             MessageBox.Show($"Restored {vpkShortName} backup from {backupDate} {backupTime}", "Success");
@@ -115,7 +119,7 @@ namespace GUI
         private void btnPatch_Click(object sender, EventArgs e)
         {
             string vpkName = new DirectoryInfo(patchDir).Name + ".vpk";  // name of vpk is name of patch folder with a .vpk extension
-            string vpkPath = gameDir + @"\" + vpkName;
+            string vpkPath = Path.Combine(gameDir, vpkName);
 
             if (!File.Exists(vpkPath))
             {
@@ -145,21 +149,21 @@ namespace GUI
             }
 
             string archName = vpkName.Replace("english", string.Empty).Replace("_dir.vpk", "_228.vpk");
-            string archPath = gameDir + @"\" + archName;
+            string archPath = Path.Combine(gameDir, archName);
 
             btnPatch.Enabled = false;
             btnRestore.Enabled = false;
 
             if (cbBackup.Checked)
             {
-                string backupFolder = backupsDir + ShortVPKname(vpkName) + @"\" + File.GetLastWriteTime(vpkPath).ToString("yyyy-MM-dd_HH-mm-ss") + @"\";  // create folder in \backups\vpkname\ with the backup's last edit time
+                string backupFolder = Path.Combine(backupsDir, ShortVPKname(vpkName), File.GetLastWriteTime(vpkPath).ToString("yyyy-MM-dd_HH-mm-ss"));  // create folder in \backups\vpkname\ with the backup's last edit time
                 Directory.CreateDirectory(backupFolder);
 
-                File.Copy(vpkPath, backupFolder + vpkName, true);
+                File.Copy(vpkPath, Path.Combine(backupFolder, vpkName), true);
 
                 if (File.Exists(archPath))
                 {
-                    File.Copy(archPath, backupFolder + archName, true);
+                    File.Copy(archPath, Path.Combine(backupFolder, archName), true);
                 }
 
                 LoadBackups();  // reload listview
@@ -169,7 +173,7 @@ namespace GUI
 
             if (cbShowConfirm.Checked)
             {
-                MessageBox.Show($"Patched\n    {vpkName}\nReplaced\n    {archName}\nin {gameDir}", "Success");
+                MessageBox.Show($"Patched\n    {vpkName}\nin {gameDir}", "Success");
             }
 
             btnPatch.Enabled = true;
@@ -188,35 +192,34 @@ namespace GUI
         // very overengineered
         private string FindDir(string path, string containedFile, string subdirs, string end = "")  // returns the path of the directory containing a given file if it can find it in any of the given subdirectories. end appends a subdirectory automatically, mostly used for recursing.
         {
-            path = path.EndsWith(@"\") ? path.Remove(path.Length - 1) : path;  // strip last \ from path
             string searchPath = end;  // start appending subdirectories *before* end
 
-            if (File.Exists(path + searchPath + @"\" + containedFile)) { return path + searchPath; }  // if already in the dir no work needs to be done
+            if (File.Exists(Path.Combine(path, searchPath, containedFile))) { return Path.Combine(path, searchPath); }  // if already in the dir no work needs to be done
 
-            string[] subdirNames = subdirs.Split(@"\", StringSplitOptions.RemoveEmptyEntries).Reverse().ToArray();  // get the names of the subdirs in the order that they will be appended
+            List<string> unsearchedSubdirs = subdirs.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).ToList();
 
-            for (int subdirIndex = 0; subdirIndex < subdirNames.Length; subdirIndex++)  // which subdir we're going to be looking at
+            while (unsearchedSubdirs.Count > 0)
             {
-                if (subdirNames[subdirIndex].Contains('|'))  // special character indicating to recurse over multiple options
+                string subdir = unsearchedSubdirs.Last();  // work from last subdir back to first
+                unsearchedSubdirs.RemoveAt(unsearchedSubdirs.Count - 1);
+
+                if (subdir.Contains('|'))  // special character indicating to recurse over multiple options
                 {
-                    string[] branches = subdirNames[subdirIndex].Split('|');  // get each option
+                    string[] branches = subdir.Split('|');  // get each option
 
-                    for (int branchIndex = 0; branchIndex < branches.Length; branchIndex++)  // which option we're looking at
+                    foreach (string branch in branches)
                     {
-                        string recSubdirs = string.Join(@"\", subdirNames.Reverse().Take(subdirNames.Length - subdirIndex - 1));  // feed the remaining subdirs we haven't searched to the recursed function
-                        string recEnd = @"\" + branches[branchIndex] + searchPath;  // append the currently searched subdirs to the recursed search (so we don't have to search them all again)
+                        string recSubdirs = Path.Combine(unsearchedSubdirs.ToArray());  // feed the remaining subdirs we haven't searched to the recursed function
+                        string recEnd = Path.Combine(branch, searchPath);  // append the currently searched subdirs to the recursed search (so we don't have to search them all again)
 
-                        string recResult = FindDir(path, containedFile, recSubdirs, recEnd);  // search the rest of the subdirs with the given option
-                        if (recResult != string.Empty)  // found directory we're looking for
-                        {
-                            return recResult;
-                        }
+                        string recResult = FindDir(path, containedFile, recSubdirs, recEnd);  // search the rest of the subdirs with the current branch
+                        if (recResult != string.Empty) { return recResult; }  // found directory we're looking for
                     }
                 }
 
-                searchPath = @"\" + subdirNames[subdirIndex] + searchPath;  // prepend the next subdir to search
+                searchPath = Path.Combine(subdir, searchPath);  // prepend the subdir that's being searched
 
-                if (File.Exists(path + searchPath + @"\" + containedFile)) { return path + searchPath; }  // found file, return location
+                if (File.Exists(Path.Combine(path, searchPath, containedFile))) { return Path.Combine(path, searchPath); }  // found file, return location
             }
 
             return string.Empty;  // didn't find file, return ""
@@ -330,10 +333,10 @@ namespace GUI
 
     public class Prefs
     {
-        public string gameDir = "";
-        public string patchDir = "";
+        public string gameDir   = "";
+        public string patchDir  = "";
         public bool showConfirm = true;
-        public bool backup = true;
+        public bool backup      = true;
 
         public void SetPrefsFromFile(string path)
         {
@@ -353,11 +356,7 @@ namespace GUI
 
         public void WritePrefsToFile(string path)
         {
-            File.WriteAllText(path,
-$@"{gameDir}
-{patchDir}
-{showConfirm}
-{backup}");
+            File.WriteAllText(path, string.Join("\n", gameDir, patchDir, showConfirm, backup));
         }
     }
 }
